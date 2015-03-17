@@ -1,106 +1,73 @@
+#include <stdio.h>
+#include <stdlib.h>
 #include <iostream>
 
 using namespace std;
 
+auto file_name = "s";
+
+inline int int_comparer(const void* a, const void* b) {
+    return *(u_int8_t*)a - *(u_int8_t*)b;
+}
+
 int main() {
 
-    unsigned int threshold = 64;
+    unsigned CHUNK_SIZE = 100;
 
-    unsigned chunkSize = 100;
-
-    FILE* f = fopen("text.txt", "r+");
+    auto f = fopen(file_name, "r+");
 
     fseek(f, 0, SEEK_END);
-    long fileSize = ftell(f);
 
-    long leftIndex = 0;
-    long rightIndex = fileSize - chunkSize - 1;
+    auto file_size = ftell(f);
 
-    unsigned char* bufferL = (unsigned char*)malloc(chunkSize);
-    unsigned char* bufferR = (unsigned char*)malloc(chunkSize);
+    auto BUFFER_LENGTH = CHUNK_SIZE * 2;
 
-    fseek(f, leftIndex, SEEK_SET);
-    fread(bufferL, 1, chunkSize, f);
+    auto buffer = new u_int8_t[BUFFER_LENGTH];
+    auto buf_2 = buffer + CHUNK_SIZE;
 
-    fseek(f, rightIndex, SEEK_SET);
-    fread(bufferR, 1, chunkSize, f);
+    auto last_chunk_size = (unsigned int)file_size % CHUNK_SIZE;
 
-    int bufIndexLeft = 0;
-    int bufIndexRight = chunkSize - 1;
+    auto chunk_count = file_size / CHUNK_SIZE;
 
-    unsigned skipAfterSwapLeft = 0;
-    unsigned skipAfterSwapRight = 0;
-
-    while (1) {
-
-        while (1) {
-            if (bufferL[bufIndexLeft] >= threshold && !skipAfterSwapLeft) {
-                break;
-            }
-
-            skipAfterSwapLeft = 0;
-
-            bufIndexLeft++;
-
-            if (bufIndexLeft == chunkSize) {
-                if (rightIndex - leftIndex < chunkSize) {
-                    goto end;
-                }
-
-                fseek(f, leftIndex, SEEK_SET);
-                fwrite(bufferL, 1, chunkSize, f);
-
-                fseek(f, leftIndex + chunkSize, SEEK_SET);
-                fread(bufferL, 1, chunkSize, f);
-
-                leftIndex += chunkSize;
-
-                bufIndexLeft = 0;
-            }
-        }
-
-        while (1) {
-            if (bufferR[bufIndexRight] < threshold && !skipAfterSwapRight) {
-                break;
-            }
-
-            skipAfterSwapRight = 0;
-
-            bufIndexRight--;
-
-            if (bufIndexRight == -1) {
-                if (rightIndex - leftIndex < chunkSize) {
-                    goto end;
-                }
-
-                fseek(f, rightIndex, SEEK_SET);
-                fwrite(bufferR, 1, chunkSize, f);
-
-                fseek(f, rightIndex - chunkSize, SEEK_SET);
-                fread(bufferR, 1, chunkSize, f);
-
-                rightIndex -= chunkSize;
-
-                bufIndexRight = chunkSize - 1;
-            }
-        }
-
-        cout << "SWAP " << (int)bufferL[bufIndexLeft] << " | " << (int)bufferR[bufIndexRight] << endl;
-
-        swap(bufferL[bufIndexLeft], bufferR[bufIndexRight]);
-
-        skipAfterSwapLeft = skipAfterSwapRight = 1;
+    if (last_chunk_size) {
+        chunk_count++;
+    } else {
+        last_chunk_size = CHUNK_SIZE;
     }
 
-    end:
+    for (auto i = 0; i < chunk_count - 1; ++i) {
 
-    fseek(f, leftIndex, SEEK_SET);
-    fwrite(bufferL, 1, chunkSize, f);
+        fseek(f, i * CHUNK_SIZE, SEEK_SET);
 
-    fseek(f, rightIndex, SEEK_SET);
-    fwrite(bufferR, 1, chunkSize, f);
+        fread(buffer, 1, CHUNK_SIZE, f);
+
+        for (auto j = i + 1; j < chunk_count; ++j) {
+
+            auto current_chunk_size = CHUNK_SIZE;
+
+            if (j == chunk_count - 1) {
+                current_chunk_size = last_chunk_size;
+            }
+
+            fseek(f, j * current_chunk_size, SEEK_SET);
+
+            fread(buf_2, 1, current_chunk_size, f);
+
+            qsort(buffer, CHUNK_SIZE + current_chunk_size, 1, int_comparer);
+
+            fseek(f, j * CHUNK_SIZE, SEEK_SET);
+
+            fwrite(buf_2, 1, current_chunk_size, f);
+
+        }
+
+        fseek(f, i * CHUNK_SIZE, SEEK_SET);
+
+        fwrite(buffer, 1, CHUNK_SIZE, f);
+    }
 
     fclose(f);
 
     return 0;
+
 }
